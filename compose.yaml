@@ -5,6 +5,18 @@ services:
       - .:/var/www/app
     depends_on:
       - postgres
+      - rabbitmq
+
+  # Тот же образ, что и php, но вместо php-fpm — воркер очереди
+  worker:
+    build: ./docker/php
+    command: php bin/console messenger:consume async --time-limit=3600 -vv
+    restart: unless-stopped
+    volumes:
+      - .:/var/www/app
+    depends_on:
+      - postgres
+      - rabbitmq
 
   nginx:
     image: nginx:1.27-alpine
@@ -26,6 +38,11 @@ services:
       - "${DB_PORT:-5442}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    ports:
+      - "${RABBITMQ_UI_PORT:-15682}:15672"
 
 volumes:
   pgdata:

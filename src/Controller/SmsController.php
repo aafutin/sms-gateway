@@ -4,12 +4,16 @@ namespace App\Controller;
 
 use App\Dto\SendSmsRequest;
 use App\Entity\SmsMessage;
+use App\Message\SendSms;
 use App\Repository\SmsMessageRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
+use Symfony\Component\Messenger\Exception\TransportException;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Uid\Uuid;
@@ -19,6 +23,8 @@ final class SmsController extends AbstractController
     public function __construct(
         private readonly EntityManagerInterface $em,
         private readonly SmsMessageRepository $repository,
+        private readonly MessageBusInterface $bus,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
@@ -27,8 +33,16 @@ final class SmsController extends AbstractController
     {
         $sms = new SmsMessage($request->phone, $request->text);
 
+        // Сначала БД, потом очередь: воркер не должен получить id, которого ещё нет в базе
         $this->em->persist($sms);
         $this->em->flush();
+
+        try {
+            $this->bus->dispatch(new SendSms($sms->getId()->toRfc4122()));
+        } catch (TransportException $e) {
+            // SMS уже сохранена — её подберёт sms:requeue-stuck, клиенту по-прежнему 202
+            $this->logger->error('Failed to queue SMS', ['id' => $sms->getId()->toRfc4122(), 'exception' => $e]);
+        }
 
         return $this->json(
             ['id' => $sms->getId()->toRfc4122(), 'status' => $sms->getStatus()->value],
@@ -47,6 +61,7 @@ final class SmsController extends AbstractController
             'text' => $sms->getText(),
             'status' => $sms->getStatus()->value,
             'attempts' => $sms->getAttempts(),
+            'providerMessageId' => $sms->getProviderMessageId(),
             'createdAt' => $sms->getCreatedAt()->format(\DATE_ATOM),
             'updatedAt' => $sms->getUpdatedAt()->format(\DATE_ATOM),
         ]);

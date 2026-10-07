@@ -1,0 +1,19 @@
+framework:
+    messenger:
+        transports:
+            async:
+                dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+                # Повторы при ошибке оператора: 1 с, 2 с, 4 с. Подробнее — шаг 4.
+                retry_strategy:
+                    max_retries: 3
+                    delay: 1000
+                    multiplier: 2
+
+        routing:
+            App\Message\SendSms: async
+
+when@test:
+    framework:
+        messenger:
+            transports:
+                async: 'in-memory://'

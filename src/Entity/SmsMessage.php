@@ -11,6 +11,7 @@ use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity(repositoryClass: SmsMessageRepository::class)]
 #[ORM\Table(name: 'sms_message')]
+#[ORM\Index(name: 'idx_sms_message_status_created_at', columns: ['status', 'created_at'])]
 class SmsMessage
 {
     #[ORM\Id]
@@ -29,6 +30,9 @@ class SmsMessage
     #[ORM\Column]
     private int $attempts = 0;
 
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $providerMessageId = null;
+
     #[ORM\Column(type: Types::DATETIMETZ_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
 
@@ -44,6 +48,23 @@ class SmsMessage
         $this->status = SmsStatus::New;
         $this->createdAt = new \DateTimeImmutable();
         $this->updatedAt = $this->createdAt;
+    }
+
+    public function registerAttempt(): void
+    {
+        ++$this->attempts;
+        $this->touch();
+    }
+
+    public function markSent(string $providerMessageId): void
+    {
+        if ($this->status->isFinal()) {
+            throw new \LogicException(sprintf('SMS %s is already final: %s', $this->id, $this->status->value));
+        }
+
+        $this->status = SmsStatus::Sent;
+        $this->providerMessageId = $providerMessageId;
+        $this->touch();
     }
 
     public function getId(): Uuid
@@ -71,6 +92,11 @@ class SmsMessage
         return $this->attempts;
     }
 
+    public function getProviderMessageId(): ?string
+    {
+        return $this->providerMessageId;
+    }
+
     public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
@@ -79,5 +105,10 @@ class SmsMessage
     public function getUpdatedAt(): \DateTimeImmutable
     {
         return $this->updatedAt;
+    }
+
+    private function touch(): void
+    {
+        $this->updatedAt = new \DateTimeImmutable();
     }
 }
