@@ -1,7 +1,7 @@
 FROM php:8.4-fpm
 
 RUN apt-get update && apt-get install -y libpq-dev libicu-dev libzip-dev librabbitmq-dev unzip git \
-    && docker-php-ext-install pdo_pgsql intl zip opcache \
+    && docker-php-ext-install pdo_pgsql intl zip opcache pcntl \
     && pecl install amqp \
     && docker-php-ext-enable amqp \
     && rm -rf /var/lib/apt/lists/* /tmp/pear

@@ -12,6 +12,8 @@ services:
     build: ./docker/php
     command: php bin/console messenger:consume async --time-limit=3600 -vv
     restart: unless-stopped
+    # Время доделать текущее сообщение после SIGTERM, потом Docker пришлёт SIGKILL
+    stop_grace_period: 30s
     volumes:
       - .:/var/www/app
     depends_on:
